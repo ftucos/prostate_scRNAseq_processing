@@ -1,0 +1,69 @@
+#!/usr/bin/bash
+
+set -uex -o pipefail
+
+#####################
+# CONFIGURE
+#####################
+
+STAR=~/userData/resources/tools/STAR/STAR-2.7.7a/bin/Linux_x86_64/STAR
+GENOME_INDEX=~/userData/resources/genomes/STAR/GRCh38
+WD=~/userData/workspace/prostate_scRNAseq
+FILE_DIR=$WD/data
+BAM_DIR=$WD/processed/bam
+OUT_DIR=$WD/output/STARsolo
+
+R1=(
+"Sample_S30943_579/S30943_579_S10_L001_R2_001.fastq.gz,Sample_S30943_579/S30943_579_S10_L002_R2_001.fastq.gz"
+"Sample_S28718_542/S28718_542_S1_L001_R2_001.fastq.gz,Sample_S28718_542/S28718_542_S1_L002_R2_001.fastq.gz"
+"Sample_S26090_512/S26090_512_S4_L001_R2_001.fastq.gz,Sample_S26090_512/S26090_512_S4_L002_R2_001.fastq.gz"
+"Sample_S26087_509/S26087_509_S1_L001_R2_001.fastq.gz,Sample_S26087_509/S26087_509_S1_L002_R2_001.fastq.gz"
+)
+
+R2=(
+  "Sample_S30943_579/S30943_579_S10_L001_R1_001.fastq.gz,Sample_S30943_579/S30943_579_S10_L002_R1_001.fastq.gz"
+  "Sample_S28718_542/S28718_542_S1_L001_R1_001.fastq.gz,Sample_S28718_542/S28718_542_S1_L002_R1_001.fastq.gz"
+  "Sample_S26090_512/S26090_512_S4_L001_R1_001.fastq.gz,Sample_S26090_512/S26090_512_S4_L002_R1_001.fastq.gz"
+  "Sample_S26087_509/S26087_509_S1_L001_R1_001.fastq.gz,Sample_S26087_509/S26087_509_S1_L002_R1_001.fastq.gz"
+)
+
+sample_name=(
+  "primary_normal_NCAM1"
+  "primary_cancer_NCAM1"
+  "DU145_NCAM1"
+  "LNCaP_NCAM1"
+)
+
+#####################
+# RUN
+#####################
+
+cd $WD
+
+mkdir -p $BAM_DIR
+mkdir -p $OUT_DIR
+mkdir -p $WD/logs/STARsolo
+
+parallel -k --lb -j 2 --link \
+"$STAR --genomeDir $GENOME_INDEX \
+  --runThreadN 12 \
+  --readNameSeparator space \
+  --readFilesPrefix $FILE_DIR/ \
+  --readFilesIn {1} {2} \
+  --readFilesCommand gunzip -c \
+  --soloFeatures Gene GeneFull Velocyto \
+  --soloType CB_UMI_Simple --soloCBwhitelist $WD/data/3M-february-2018.txt \
+  --soloUMIfiltering MultiGeneUMI --soloCBmatchWLtype 1MM_multi_pseudocounts \
+  --soloUMIlen 12 \
+  --outSAMtype BAM SortedByCoordinate \
+  --outFileNamePrefix $BAM_DIR/{3}." \
+::: ${R1[@]} ::: ${R2[@]} ::: ${sample_name[@]}
+
+# Index Bam files
+# ...
+
+# Move log files
+mv $BAM_DIR/*Log* $WD/logs/STAR
+
+# Move output counts
+mv $BAM_DIR/*Solo.out $OUT_DIR/
